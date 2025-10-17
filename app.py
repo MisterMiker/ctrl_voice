@@ -5,47 +5,51 @@ from bokeh.models import CustomJS
 from streamlit_bokeh_events import streamlit_bokeh_events
 from PIL import Image
 import time
-import glob
-import paho.mqtt.client as paho
 import json
+import paho.mqtt.client as paho
 from gtts import gTTS
 from googletrans import Translator
 
-def on_publish(client,userdata,result):             #create function for callback
-    print("el dato ha sido publicado \n")
+
+# ==== FUNCIONES MQTT ====
+def on_publish(client, userdata, result):
+    print("✅ El dato ha sido publicado\n")
     pass
+
 
 def on_message(client, userdata, message):
     global message_received
     time.sleep(2)
-    message_received=str(message.payload.decode("utf-8"))
-    st.write(message_received)
+    message_received = str(message.payload.decode("utf-8"))
+    st.write(f"📩 Mensaje recibido: {message_received}")
 
-broker="broker.mqttdashboard.com"
-port=1883
-client1= paho.Client("GIT-HUBpapuuu")
+
+# ==== CONFIGURACIÓN MQTT ====
+broker = "broker.mqttdashboard.com"
+port = 1883
+client1 = paho.Client("GIT-HUBpapuuu")
 client1.on_message = on_message
 
 
-
-st.title("INTERFACES MULTIMODALES")
+# ==== CONFIGURACIÓN DE PÁGINA ====
+st.set_page_config(page_title="Control por Voz", page_icon="🎙️")
+st.title("🎙️ INTERFACES MULTIMODALES")
 st.subheader("CONTROL POR VOZ")
 
-image = Image.open('voice_ctrl.jpg')
-
+image = Image.open("voice_ctrl.jpg")
 st.image(image, width=200)
 
+st.write("Toca el botón y habla...")
 
 
-
-st.write("Toca el Botón y habla ")
-
-stt_button = Button(label=" Inicio ", width=200)
+# ==== BOTÓN DE ESCUCHA ====
+stt_button = Button(label="🎤 Iniciar reconocimiento", width=250)
 
 stt_button.js_on_event("button_click", CustomJS(code="""
     var recognition = new webkitSpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.lang = "es-ES";
  
     recognition.onresult = function (e) {
         var value = "";
@@ -54,12 +58,12 @@ stt_button.js_on_event("button_click", CustomJS(code="""
                 value += e.results[i][0].transcript;
             }
         }
-        if ( value != "") {
+        if (value != "") {
             document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
         }
     }
     recognition.start();
-    """))
+"""))
 
 result = streamlit_bokeh_events(
     stt_button,
@@ -67,18 +71,34 @@ result = streamlit_bokeh_events(
     key="listen",
     refresh_on_update=False,
     override_height=75,
-    debounce_time=0)
+    debounce_time=0
+)
 
-if result:
-    if "GET_TEXT" in result:
-        st.write(result.get("GET_TEXT"))
-        client1.on_publish = on_publish                            
-        client1.connect(broker,port)  
-        message =json.dumps({"Act1":result.get("GET_TEXT").strip()})
-        ret= client1.publish("voice_ctrl", message)
+# ==== PROCESAMIENTO DE RESULTADO ====
+if result and "GET_TEXT" in result:
 
-    
-    try:
-        os.mkdir("temp")
-    except:
-        pass
+    with st.spinner("🎧 Escuchando y procesando..."):
+        time.sleep(1.5)
+
+    # Texto reconocido
+    text = result.get("GET_TEXT").strip()
+    st.success(f"🗣️ Texto reconocido: {text}")
+
+    # Traducir texto
+    translator = Translator()
+    translated = translator.translate(text, dest='es').text
+    st.info(f"🔤 Traducción: {translated}")
+
+    # Publicar mensaje en MQTT
+    client1.on_publish = on_publish
+    client1.connect(broker, port)
+    message = json.dumps({"Act1": text})
+    client1.publish("voice_ctrl", message)
+
+    # Crear carpeta temporal si no existe
+    os.makedirs("temp", exist_ok=True)
+
+    # Reproducir voz de respuesta
+    tts = gTTS(f"Dijiste: {translated}", lang="es")
+    tts.save("temp/voice.mp3")
+    st.audio("temp/voice.mp3", format="audio/mp3")
