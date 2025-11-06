@@ -11,6 +11,8 @@ from gtts import gTTS
 from googletrans import Translator
 
 
+
+
 # ==== FUNCIONES MQTT ====
 def on_publish(client, userdata, result):
     print("✅ El dato ha sido publicado\n")
@@ -93,7 +95,7 @@ if result and "GET_TEXT" in result:
     client1.on_publish = on_publish
     client1.connect(broker, port)
     message = json.dumps({"Act1": text})
-    client1.publish("voice_ctrl", message)
+    client1.publish("ZuluMikerCasa", message)
 
     # Crear carpeta temporal si no existe
     os.makedirs("temp", exist_ok=True)
